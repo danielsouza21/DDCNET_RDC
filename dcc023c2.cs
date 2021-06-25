@@ -348,12 +348,15 @@ namespace DCCNET_TP0
 
         public static class MasterLoop
         {
+            public static bool nodeFinishedFlag;
+            public static bool dataFinishedFlag;
             public static void DCCNET(Socket socket, bool client)
             {
                 int data;
                 int actualId = 0;
                 int? lastId = null;
-                bool nodeFinished = false;
+                nodeFinishedFlag = false;
+                dataFinishedFlag = false;
 
                 if (client)
                 {
@@ -366,29 +369,50 @@ namespace DCCNET_TP0
 
                 while (true)
                 {
-                    if(!(data == 33 || data == 65)) // If does not exist data
+                    Console.WriteLine("Data: " + data);
+                    if (data == 13 || data == 60) // If does not exist data
+                    {
+                        Console.WriteLine("dataFinishedFlag to true");
+                        dataFinishedFlag = true;
+                    }
+
+                    if (!dataFinishedFlag)
                     {
                         actualId = actualId == 0 ? 1 : 0;
                         var framework = new Frame("faef", actualId.ToString(), FLAG_INFO, "1234" + data).ToString();
 
                         Console.WriteLine("Send Framework: " + framework);
 
-                        byte[] byteData1 = Encoding.ASCII.GetBytes(framework);
-                        socket.Send(byteData1);
-                        //SendAsync(socket, framework);
-                        //sendDone.WaitOne();
+                        byte[] byteData = Encoding.ASCII.GetBytes(framework);
+                        socket.Send(byteData);
                     }
                     else
                     {
-                        break;
+                        actualId = actualId == 0 ? 1 : 0;
+                        var framework = new Frame("faef", actualId.ToString(), FLAG_END, "").ToString();
+
+                        Console.WriteLine("Send END Frame: " + framework);
+
+                        byte[] byteData = Encoding.ASCII.GetBytes(framework);
+                        socket.Send(byteData);
+                    }
+
+                    if (dataFinishedFlag && nodeFinishedFlag)
+                    {
+                        return;
                     }
 
                     while (true)
                     {
                         var buffer = new StateObject().buffer;
-                        string content = string.Empty;
+                        var content = string.Empty;
                         int bytesRec;
-                        Frame frame;
+                        var frame = new Frame();
+
+                        if (dataFinishedFlag && nodeFinishedFlag)
+                        {
+                            return;
+                        }
 
                         while (true)
                         {
@@ -414,9 +438,16 @@ namespace DCCNET_TP0
                         }
                         else if ((Int16.Parse(frame.Lenght) == 0) && (frame.Flags == FLAG_END)) // End Communication
                         {
+                            Console.WriteLine("[Frame END] Data: " + frame.ToString());
 
+                            var frameACK = new Frame("faef", frame.Id, FLAG_ACK, "").ToString();
+                            Console.WriteLine("Send confirmation END: " + frameACK);
+
+                            byte[] byteData = Encoding.ASCII.GetBytes(frameACK);
+                            socket.Send(byteData);
+                            nodeFinishedFlag = true;
                         }
-                        else // Information
+                        else if(!(dataFinishedFlag && nodeFinishedFlag)) // Information
                         {
                             if ((Int32.Parse(frame.Id) != lastId) || lastId == null)  // Accept just if is a different info
                             {
@@ -426,15 +457,13 @@ namespace DCCNET_TP0
 
                                 WriteTxt(frame.ToString(), FileOutput);
 
-                                //SendAsync(socket, frameACK);
-                                //sendDone.WaitOne();
                                 Console.WriteLine("Send confirmation: " + frameACK);
                                 byte[] byteData = Encoding.ASCII.GetBytes(frameACK);
                                 socket.Send(byteData);
                             }
                             else
                             {
-                                Console.WriteLine("Same ID");
+                                Console.WriteLine("Same ID - Not Accepted");
                             }
                         }
                     }
