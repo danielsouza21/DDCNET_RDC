@@ -8,12 +8,12 @@ using System.Threading;
 
 namespace DCCNET_TP0
 {
-    public class dcc023c2
+    public class Dcc023c2
     {
-        private static string SYNC_VALUE = "dcc023c2";
-        private static string FLAG_ACK = "80";
-        private static string FLAG_END = "40";
-        private static string FLAG_INFO = "00";
+        private static readonly string SYNC_VALUE = "dcc023c2";
+        private static readonly string FLAG_ACK = "80";
+        private static readonly string FLAG_END = "40";
+        private static readonly string FLAG_INFO = "00";
         public static string FileOutput;
         public static string FileInput;
 
@@ -61,7 +61,6 @@ namespace DCCNET_TP0
         public static class AsynchronousClient
         {
             private static ManualResetEvent connectDone = new ManualResetEvent(false);
-            private static ManualResetEvent sendDone = new ManualResetEvent(false);
             private static ManualResetEvent receiveDone = new ManualResetEvent(false);
 
             public static void StartClient(string ip, string port)
@@ -411,37 +410,26 @@ namespace DCCNET_TP0
 
                 while (true)
                 {
-                    if(data < (dataFiles.Count - 1))
+                    if(data <= (dataFiles.Count - 1))
                     {
                         dataToSend = dataFiles[data];
                     }
                     else
                     {
+                        Console.WriteLine("Finalized data to be sent");
                         dataFinishedFlag = true;
                     }
 
                     if (!dataFinishedFlag)
                     {
-                        actualId = actualId == 0 ? 1 : 0;
-                        var framework = new Frame("faef", actualId.ToString(), FLAG_INFO, dataToSend).ToString();
-
-                        Console.WriteLine("Send Framework: " + framework);
-
-                        byte[] byteData = Encoding.ASCII.GetBytes(framework);
-                        socket.Send(byteData);
+                        actualId = SendInfoDataMessage(socket, actualId, dataToSend);
                     }
                     else
                     {
-                        actualId = actualId == 0 ? 1 : 0;
-                        var framework = new Frame("faef", actualId.ToString(), FLAG_END, "").ToString();
-
-                        Console.WriteLine("Send END Frame: " + framework);
-
-                        byte[] byteData = Encoding.ASCII.GetBytes(framework);
-                        socket.Send(byteData);
+                        actualId = SendEndCommunicationMessage(socket, actualId);
                     }
 
-                    if (dataFinishedFlag && nodeFinishedFlag)
+                    if (TestDataFinished()) // Check that all data has already been sent and received
                     {
                         return;
                     }
@@ -450,60 +438,35 @@ namespace DCCNET_TP0
                     {
                         var buffer = new StateObject().buffer;
                         var content = string.Empty;
-                        int bytesRec;
                         var frame = new Frame();
 
-                        if (dataFinishedFlag && nodeFinishedFlag)
+                        if (TestDataFinished()) 
                         {
                             return;
                         }
 
-                        while (true)
-                        {
-                            bytesRec = socket.Receive(buffer);
-                            content += Encoding.ASCII.GetString(buffer, 0, bytesRec);
-                            if ((bytesRec > 0) && (bytesRec < StateObject.BufferSize))
-                            {
-                                frame = ContentToFramework(content);
-                                Console.WriteLine("Decode Received Framework: " + frame.ToString());
-                                content = "";
-
-                                break;
-                            }
-                        }
+                        content = WaitReceiveMessage(socket, buffer, content, out frame);
 
                         // If Verifica Checksum + Verifica Framework (SYNC1 + SYNC2)
 
                         if ((Int16.Parse(frame.Lenght) == 0) && (frame.Flags == FLAG_ACK)) // ACK
                         {
                             Console.WriteLine("[Frame ACK] Data: " + frame.ToString());
-                            data++;
+                            data++; // Configure to send the next data
                             break;
                         }
                         else if ((Int16.Parse(frame.Lenght) == 0) && (frame.Flags == FLAG_END)) // End Communication
                         {
                             Console.WriteLine("[Frame END] Data: " + frame.ToString());
-
-                            var frameACK = new Frame("faef", frame.Id, FLAG_ACK, "").ToString();
-                            Console.WriteLine("Send confirmation END: " + frameACK);
-
-                            byte[] byteData = Encoding.ASCII.GetBytes(frameACK);
-                            socket.Send(byteData);
-                            nodeFinishedFlag = true;
+                            SendEndMessage(socket, frame);
                         }
                         else // Information
                         {
                             if ((Int32.Parse(frame.Id) != lastId) || lastId == null)  // Accept just if is a different info
                             {
                                 Console.WriteLine("Accepted Info");
-
-                                var frameACK = new Frame("faef", frame.Id, FLAG_ACK, "").ToString();
-
                                 WriteTxt(frame.Data, FileOutput);
-
-                                Console.WriteLine("Send confirmation: " + frameACK);
-                                byte[] byteData = Encoding.ASCII.GetBytes(frameACK);
-                                socket.Send(byteData);
+                                SendCOnfirmationACK(socket, frame);
                             }
                             else
                             {
@@ -513,7 +476,79 @@ namespace DCCNET_TP0
                     }
                 }
             }
+
+            #region DCCNET Private Methods
+
+            private static int SendInfoDataMessage(Socket socket, int actualId, string dataToSend)
+            {
+                actualId = actualId == 0 ? 1 : 0;
+                var framework = new Frame("faef", actualId.ToString(), FLAG_INFO, dataToSend).ToString();
+
+                Console.WriteLine("Send Framework: " + framework);
+
+                byte[] byteData = Encoding.ASCII.GetBytes(framework);
+                socket.Send(byteData);
+                return actualId;
+            }
+
+            private static int SendEndCommunicationMessage(Socket socket, int actualId)
+            {
+                actualId = actualId == 0 ? 1 : 0;
+                var framework = new Frame("faef", actualId.ToString(), FLAG_END, "").ToString();
+
+                Console.WriteLine("Send END Frame: " + framework);
+
+                byte[] byteData = Encoding.ASCII.GetBytes(framework);
+                socket.Send(byteData);
+                return actualId;
+            }
+
+            private static bool TestDataFinished()
+            {
+                return dataFinishedFlag && nodeFinishedFlag;
+            }
+
+            private static string WaitReceiveMessage(Socket socket, byte[] buffer, string content, out Frame frame)
+            {
+                int bytesRec;
+
+                while (true)
+                {
+                    bytesRec = socket.Receive(buffer);
+                    content += Encoding.ASCII.GetString(buffer, 0, bytesRec);
+                    if ((bytesRec > 0) && (bytesRec < StateObject.BufferSize))
+                    {
+                        frame = ContentToFramework(content);
+                        Console.WriteLine("Decode Received Framework: " + frame.ToString());
+                        content = "";
+
+                        break;
+                    }
+                }
+
+                return content;
+            }
+
+            private static void SendCOnfirmationACK(Socket socket, Frame frame)
+            {
+                var frameACK = new Frame("faef", frame.Id, FLAG_ACK, "").ToString();
+                Console.WriteLine("Send confirmation: " + frameACK);
+                byte[] byteData = Encoding.ASCII.GetBytes(frameACK);
+                socket.Send(byteData);
+            }
+
+            private static void SendEndMessage(Socket socket, Frame frame)
+            {
+                var frameACK = new Frame("faef", frame.Id, FLAG_ACK, "").ToString();
+                Console.WriteLine("Send confirmation END: " + frameACK);
+
+                byte[] byteData = Encoding.ASCII.GetBytes(frameACK);
+                socket.Send(byteData);
+                nodeFinishedFlag = true;
+            }
         }
+
+        #endregion
 
         #endregion
     }
