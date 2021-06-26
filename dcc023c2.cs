@@ -15,6 +15,7 @@ namespace DCCNET_TP0
         private static string FLAG_END = "40";
         private static string FLAG_INFO = "00";
         public static string FileOutput;
+        public static string FileInput;
 
         static void Main(string[] args)
         {
@@ -27,12 +28,14 @@ namespace DCCNET_TP0
 
             if (args[0] == "-c")
             {
+                FileInput = args[3];
                 FileOutput = args[4];
                 // Cliente configure
                 AsynchronousClient.StartClient(args[1], args[2]);
             }
             else if (args[0] == "-s")
             {
+                FileInput = args[2];
                 FileOutput = args[3];
                 // Server configure
                 AsynchronousSocketServer.StartListening(args[1]);
@@ -338,8 +341,53 @@ namespace DCCNET_TP0
 
         private static void WriteTxt(string content, string filename)
         {
+            Console.WriteLine("Writing file " + filename);
             var file = $"{filename}.txt";
             File.AppendAllText(file, content + Environment.NewLine);
+        }
+
+        private static List<String> GetStringSeparatedFromFile(string namefile)
+        {
+            byte[] fileData = null;
+
+            try
+            {
+                using (FileStream fs = File.OpenRead(namefile + ".txt"))
+                {
+                    Console.WriteLine("Opening file " + namefile);
+                    using (BinaryReader binaryReader = new BinaryReader(fs))
+                    {
+                        fileData = binaryReader.ReadBytes((int)fs.Length);
+                    }
+                }
+            }
+            catch
+            {
+                throw new Exception("Error opening file " + namefile);
+            }
+
+            var dataRead = BufferSplit(fileData, StateObject.BufferSize);
+            var list = new List<string>();
+
+            foreach (var data in dataRead)
+            {
+                list.Add(Encoding.UTF8.GetString(data));
+            }
+
+            return list;
+        }
+
+        public static byte[][] BufferSplit(byte[] buffer, int blockSize)
+        {
+            byte[][] blocks = new byte[(buffer.Length + blockSize - 1) / blockSize][];
+
+            for (int i = 0, j = 0; i < blocks.Length; i++, j += blockSize)
+            {
+                blocks[i] = new byte[Math.Min(blockSize, buffer.Length - j)];
+                Array.Copy(buffer, j, blocks[i], 0, blocks[i].Length);
+            }
+
+            return blocks;
         }
 
         #endregion
@@ -352,34 +400,30 @@ namespace DCCNET_TP0
             public static bool dataFinishedFlag;
             public static void DCCNET(Socket socket, bool client)
             {
-                int data;
+                int data = 0;
                 int actualId = 0;
                 int? lastId = null;
+                string dataToSend = string.Empty;
                 nodeFinishedFlag = false;
                 dataFinishedFlag = false;
 
-                if (client)
-                {
-                    data = 11;
-                }
-                else
-                {
-                    data = 55;
-                }
+                var dataFiles = GetStringSeparatedFromFile(FileInput);
 
                 while (true)
                 {
-                    Console.WriteLine("Data: " + data);
-                    if (data == 13 || data == 60) // If does not exist data
+                    if(data < (dataFiles.Count - 1))
                     {
-                        Console.WriteLine("dataFinishedFlag to true");
+                        dataToSend = dataFiles[data];
+                    }
+                    else
+                    {
                         dataFinishedFlag = true;
                     }
 
                     if (!dataFinishedFlag)
                     {
                         actualId = actualId == 0 ? 1 : 0;
-                        var framework = new Frame("faef", actualId.ToString(), FLAG_INFO, "1234" + data).ToString();
+                        var framework = new Frame("faef", actualId.ToString(), FLAG_INFO, dataToSend).ToString();
 
                         Console.WriteLine("Send Framework: " + framework);
 
@@ -447,7 +491,7 @@ namespace DCCNET_TP0
                             socket.Send(byteData);
                             nodeFinishedFlag = true;
                         }
-                        else if(!(dataFinishedFlag && nodeFinishedFlag)) // Information
+                        else // Information
                         {
                             if ((Int32.Parse(frame.Id) != lastId) || lastId == null)  // Accept just if is a different info
                             {
@@ -455,7 +499,7 @@ namespace DCCNET_TP0
 
                                 var frameACK = new Frame("faef", frame.Id, FLAG_ACK, "").ToString();
 
-                                WriteTxt(frame.ToString(), FileOutput);
+                                WriteTxt(frame.Data, FileOutput);
 
                                 Console.WriteLine("Send confirmation: " + frameACK);
                                 byte[] byteData = Encoding.ASCII.GetBytes(frameACK);
