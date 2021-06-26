@@ -374,8 +374,15 @@ namespace DCCNET_TP0
 
             public Frame(string id, string flags, string data, string forceChecksum = null, string forceSync = null)
             {
-                string dataConcat = data;
-                var dataSize = dataConcat.Length.ToString().PadLeft(4, '0');
+                string dataConcat = string.Empty;
+
+                foreach (var ch in data)
+                {
+                    dataConcat += "0";
+                    dataConcat += ch;
+                }
+
+                var dataSize = data.Length.ToString().PadLeft(4, '0');
 
                 if (dataSize.Length > 4)
                 {
@@ -383,13 +390,11 @@ namespace DCCNET_TP0
                 }
 
                 var idSet = id.PadLeft(2, '0');
-                
+
                 var checksumCalc = CalculateChecksum(SYNC_VALUE + SYNC_VALUE + dataSize + "0000" + idSet + flags);
 
                 var checksum_value = forceChecksum == null ? checksumCalc : forceChecksum; // Set checksum if not forced
                 var sync_value = forceSync == null ? SYNC_VALUE : forceSync; // Set Sync if not forced
-
-                //Flags = calculaChecksum()
 
                 Sync1 = sync_value;
                 Sync2 = sync_value;
@@ -433,14 +438,21 @@ namespace DCCNET_TP0
             Frame.Flags = content.Substring(buildedString.Length, FrameworkSize.Flags * 2);
             buildedString += Frame.Flags;
 
-            try
+            var aux = Frame.Data = content.Substring(buildedString.Length);
+
+            var dataDesconcat = string.Empty;
+            int i = 0;
+
+            foreach (var ch in aux)
             {
-                Frame.Data = content.Substring(buildedString.Length, Int16.Parse(Frame.Lenght));
+                if (i % 2 != 0)
+                {
+                    dataDesconcat = dataDesconcat + ch;
+                }
+                i++;
             }
-            catch
-            {
-                Frame.Data = "";
-            }
+
+            Frame.Data = dataDesconcat.Substring(0, Int16.Parse(Frame.Lenght)); ;
 
             return Frame;
         }
@@ -471,7 +483,7 @@ namespace DCCNET_TP0
                 throw new Exception("Error opening file " + namefile);
             }
 
-            var dataRead = BufferSplit(fileData, StateObject.BufferSize);
+            var dataRead = BufferSplit(fileData, StateObject.BufferSize / 2);
             var list = new List<string>();
 
             foreach (var data in dataRead)
@@ -520,7 +532,7 @@ namespace DCCNET_TP0
 
                 errorcount1 = true;
                 errorcount2 = true;
-                errorcount3 = true;
+                errorcount3 = false;
 
                 Stopwatch sw = new Stopwatch();
 
@@ -547,7 +559,7 @@ namespace DCCNET_TP0
                     {
                         Console.WriteLine("Data: " + data);
 
-                        if((data >= dataFiles.Count - 1) && errorcount1)
+                        if ((data >= dataFiles.Count - 1) && errorcount1)
                         {
                             errorcount1 = false;
                             SendDataInfoMessage(socket, actualId, dataToSend, "FFFF");
@@ -556,10 +568,11 @@ namespace DCCNET_TP0
                         {
                             errorcount2 = false;
                             SendDataInfoMessage(socket, actualId, dataToSend, null, "ErrorSyncErrorSync");
-                        }else if ((data == 0) && errorcount3)
+                        }
+                        else if ((data == 0) && errorcount3)
                         {
                             errorcount3 = false;
-                            var framework = "dcc023c2dcc023c2CCCC0001AAAA12345678901dcc023c2dcc023c20004faef000001020304";
+                            var framework = $"dcc023c2dcc023c2CCCC0001AAAA12345678901dcc023c2dcc023c20004fef5{actualId.ToString().PadLeft(2, '0')}0001020304";
                             Console.WriteLine("Send Framework: " + framework);
                             byte[] byteData = Encoding.ASCII.GetBytes(framework);
                             socket.Send(byteData);
@@ -596,7 +609,7 @@ namespace DCCNET_TP0
 
                         try
                         {
-                            content = WaitReceiveMessage(socket, buffer, content, out frame, sw);
+                            content = WaitReceiveMessage(socket, buffer, content, sw);
                         }
                         catch (SocketException)
                         {
@@ -604,9 +617,11 @@ namespace DCCNET_TP0
                             break; // Receive Timeout - Resend message
                         }
 
-                        // If Verifica Checksum + Verifica Framework (SYNC1 + SYNC2)
+                        var canFoundData = GetCorrectContentFramePattern(content, out frame);
 
-                        if (VerifyChecksum(frame.GetHeader()) && frame.CheckSync())
+                        Console.WriteLine("Decode Received Framework: " + frame.ToString());
+
+                        if (canFoundData)
                         {
                             Console.WriteLine("Checksum verificado");
 
@@ -634,7 +649,7 @@ namespace DCCNET_TP0
                                 }
                                 else
                                 {
-                                    Console.WriteLine("[Warning] Same ID - Not Accepted");
+                                    Console.WriteLine("[Warning] Same ID - Data not accepted - ID = " + frame.Id);
                                 }
                             }
                         }
@@ -646,6 +661,43 @@ namespace DCCNET_TP0
                 }
             }
 
+            private static bool GetCorrectContentFramePattern(string content, out Frame frame)
+            {
+                frame = new Frame();
+                var twoSync = SYNC_VALUE + SYNC_VALUE;
+                var dataFound = content.Split(twoSync);
+
+                if (dataFound == null)
+                {
+                    return false;
+                }
+
+                var dataFoundList = dataFound.ToList();
+
+                foreach (var data in dataFoundList)
+                {
+                    if(data != string.Empty)
+                    {
+                        var dataSync = twoSync + data;
+                        try
+                        {
+                            frame = ContentToFramework(dataSync);
+                        }
+                        catch
+                        {
+                            Console.WriteLine("Catch");
+                        }
+
+                        if (VerifyChecksum(frame.GetHeader()))
+                        {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }
+
             private static void SendConfirmationACK(Socket socket, Frame frame)
             {
                 var frameACK = new Frame(frame.Id, FLAG_ACK, "").ToString();
@@ -655,27 +707,22 @@ namespace DCCNET_TP0
                 socket.Send(byteData);
             }
 
-            private static string WaitReceiveMessage(Socket socket, byte[] buffer, string content, out Frame frame, Stopwatch sw)
+            private static string WaitReceiveMessage(Socket socket, byte[] buffer, string content, Stopwatch sw)
             {
                 int bytesRec;
+                content = string.Empty;
                 Console.WriteLine("Waiting receive message...");
-
-                frame = new Frame();
 
                 while (true)
                 {
                     bytesRec = socket.Receive(buffer);
                     content += Encoding.ASCII.GetString(buffer, 0, bytesRec);
-                    if ((bytesRec > 0) && (bytesRec < StateObject.BufferSize))
-                    {
-                        frame = ContentToFramework(content);
-                        Console.WriteLine("Decode Received Framework: " + frame.ToString());
-                        content = "";
 
+                    if ((bytesRec > 0) && (bytesRec < StateObject.BufferSize))
                         break;
-                    }
                 }
 
+                Console.WriteLine("Content received: " + content);
                 return content;
             }
 
