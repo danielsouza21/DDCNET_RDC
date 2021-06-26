@@ -1,11 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+
+// TP1 - Redes de computadores
+// Universidade Federal de Minas Gerais
+// DCCNET
+// Daniel Oliveira Souza
+// Maria Fernanda Favaro
 
 namespace DCCNET_TP0
 {
@@ -486,6 +493,8 @@ namespace DCCNET_TP0
         {
             public static bool nodeFinishedFlag;
             public static bool dataFinishedFlag;
+            public static bool timeoutSendMessage;
+
             public static void DCCNET(Socket socket, bool client)
             {
                 int data = 0;
@@ -495,11 +504,16 @@ namespace DCCNET_TP0
                 nodeFinishedFlag = false;
                 dataFinishedFlag = false;
 
+                Stopwatch sw = new Stopwatch();
+
                 var dataFiles = GetStringSeparatedFromFile(FileInput);
                 Console.WriteLine(Environment.NewLine);
 
                 while (true)
                 {
+                    sw.Restart();
+                    Console.WriteLine("Restarted time");
+
                     if(data <= (dataFiles.Count - 1))
                     {
                         dataToSend = dataFiles[data];
@@ -519,6 +533,8 @@ namespace DCCNET_TP0
                         actualId = SendEndMessage(socket, actualId);
                     }
 
+                    sw.Start();
+
                     while (true)
                     {
                         var buffer = new StateObject().buffer;
@@ -528,6 +544,14 @@ namespace DCCNET_TP0
                         if (dataFinishedFlag && nodeFinishedFlag)
                         {
                             return;
+                        }
+
+                        Console.WriteLine("Timer: " + sw.ElapsedMilliseconds);
+
+                        if (sw.ElapsedMilliseconds > 10000)
+                        {
+                            Console.WriteLine("Burst timeout - " + 10000/1000 + "s");
+                            break; //resend message
                         }
 
                         content = WaitReceiveMessage(socket, buffer, content, out frame);

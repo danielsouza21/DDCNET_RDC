@@ -1,0 +1,13 @@
+Run in windows
+ - Set csc path in cmd [https://www.youtube.com/watch?v=7cfa272BW7I&ab_channel=TheLaptopMan]
+csc teste.cs
+.\teste (params)
+
+Run in linux
+ - apt install chicken-bin
+ - sudo apt install mono-complete
+
+ mcs -out:hello.exe Hello.cs
+ mono hello.exe
+
+cd '/mnt/c/Users/danie/iCloudDrive/UFMG/7º Periodo/Redes de Computadores/Teste C#'
