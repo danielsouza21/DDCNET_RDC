@@ -4,6 +4,6 @@
     <DebuggerFlavor>ProjectDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup>
-    <ActiveDebugProfile>DCCNET_TP0_Server</ActiveDebugProfile>
+    <ActiveDebugProfile>DCCNET_TP0</ActiveDebugProfile>
   </PropertyGroup>
 </Project>
