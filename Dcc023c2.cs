@@ -517,9 +517,9 @@ namespace DCCNET_TP0
             public static bool nodeFinishedFlag;
             public static bool dataFinishedFlag;
             public static bool timeoutSendMessage;
-            public static bool errorcount1;
-            public static bool errorcount2;
-            public static bool errorcount3;
+            public static bool flagTeste1;
+            public static bool flagTeste2;
+            public static bool flagTeste3;
 
             public static void DCCNET(Socket socket)
             {
@@ -530,9 +530,9 @@ namespace DCCNET_TP0
                 nodeFinishedFlag = false;
                 dataFinishedFlag = false;
 
-                errorcount1 = true;
-                errorcount2 = true;
-                errorcount3 = false;
+                flagTeste1 = true;
+                flagTeste2 = true;
+                flagTeste3 = false;
 
                 Stopwatch sw = new Stopwatch();
 
@@ -559,19 +559,20 @@ namespace DCCNET_TP0
                     {
                         Console.WriteLine("Data: " + data);
 
-                        if ((data >= dataFiles.Count - 1) && errorcount1)
+                        if ((data >= dataFiles.Count - 1) && flagTeste1)
                         {
-                            errorcount1 = false;
+                            flagTeste1 = false;
                             SendDataInfoMessage(socket, actualId, dataToSend, "FFFF");
                         }
-                        else if ((data >= dataFiles.Count / 2) && errorcount2)
+                        else if ((data >= dataFiles.Count / 2) && flagTeste2)
                         {
-                            errorcount2 = false;
+                            flagTeste2 = false;
                             SendDataInfoMessage(socket, actualId, dataToSend, null, "ErrorSyncErrorSync");
                         }
-                        else if ((data == 0) && errorcount3)
+                        else if ((data == 0) && flagTeste3)
                         {
-                            errorcount3 = false;
+                            actualId = actualId == 0 ? 1 : 0;
+                            flagTeste3 = false;
                             var framework = $"dcc023c2dcc023c2CCCC0001AAAA12345678901dcc023c2dcc023c20004fef5{actualId.ToString().PadLeft(2, '0')}0001020304";
                             Console.WriteLine("Send Framework: " + framework);
                             byte[] byteData = Encoding.ASCII.GetBytes(framework);
