@@ -14,22 +14,23 @@ using System.Threading;
 // Daniel Oliveira Souza
 // Maria Fernanda Favaro
 
-namespace DCCNET_TP0
+namespace DCCNET_TP0_Error
 {
-    public class dcc023c2
+    public class Dcc023c2
     {
-        private static string SYNC_VALUE = "dcc023c2";
-        private static string FLAG_ACK = "80";
-        private static string FLAG_END = "40";
-        private static string FLAG_INFO = "00";
+        private static readonly string SYNC_VALUE = "dcc023c2";
+        private static readonly string FLAG_ACK = "80";
+        private static readonly string FLAG_END = "40";
+        private static readonly string FLAG_INFO = "00";
         public static string FileOutput;
         public static string FileInput;
 
-        public static int TIMEOUT = 3000;
+        public static int TIMEOUT = 1000;
 
         static void Main(string[] args)
         {
-            //var tst = CalculateChecksum("dcc023c2dcc023c2000400000000");
+            Console.WriteLine("File error test");
+
             if ((args.Length < 4))
             {
                 Console.WriteLine("Argumentos invalidos.");
@@ -192,29 +193,25 @@ namespace DCCNET_TP0
                     listener.Bind(localEndPoint);
                     listener.Listen(100);
 
-                    while (true)
-                    {
-                        // Set the event to nonsignaled state.  
-                        allDone.Reset();
+                    // Set the event to nonsignaled state.  
+                    allDone.Reset();
 
-                        // Start an asynchronous socket to listen for connections.  
-                        Console.WriteLine("Waiting for a connection...");
-                        listener.BeginAccept(
-                            new AsyncCallback(AcceptCallback),
-                            listener);
+                    // Start an asynchronous socket to listen for connections.  
+                    Console.WriteLine("Waiting for a connection...");
+                    listener.BeginAccept(
+                        new AsyncCallback(AcceptCallback),
+                        listener);
 
-                        // Wait until a connection is made before continuing.  
-                        allDone.WaitOne();
-                    }
-
+                    // Wait until a connection is made before continuing.  
+                    allDone.WaitOne();
                 }
                 catch (Exception e)
                 {
                     Console.WriteLine(e.ToString());
                 }
 
-                Console.WriteLine("\nPress ENTER to continue...");
-                Console.Read();
+                //Console.WriteLine("\nPress ENTER to continue...");
+                //Console.Read();
 
             }
 
@@ -452,14 +449,14 @@ namespace DCCNET_TP0
                 i++;
             }
 
-            Frame.Data = dataDesconcat.Substring(0, Int16.Parse(Frame.Lenght)); ;
+            Frame.Data = dataDesconcat.Substring(0, Int16.Parse(Frame.Lenght));
 
             return Frame;
         }
 
         private static void WriteTxt(string content, string filename)
         {
-            var file = $"{filename}.txt";
+            var file = filename + ".txt";
             File.AppendAllText(file, content);
         }
 
@@ -532,7 +529,7 @@ namespace DCCNET_TP0
 
                 flagTeste1 = true;
                 flagTeste2 = true;
-                flagTeste3 = false;
+                flagTeste3 = true;
 
                 Stopwatch sw = new Stopwatch();
 
@@ -555,37 +552,39 @@ namespace DCCNET_TP0
                         dataFinishedFlag = true;
                     }
 
+                    Console.WriteLine("Data: " + data);
+
                     if (!dataFinishedFlag)
                     {
-                        Console.WriteLine("Data: " + data);
-
                         if ((data >= dataFiles.Count - 1) && flagTeste1)
                         {
                             flagTeste1 = false;
-                            SendDataInfoMessage(socket, actualId, dataToSend, "FFFF");
+                            actualId = SendDataInfoMessage(socket, actualId, dataToSend, "FFFF");
                         }
                         else if ((data >= dataFiles.Count / 2) && flagTeste2)
                         {
                             flagTeste2 = false;
-                            SendDataInfoMessage(socket, actualId, dataToSend, null, "ErrorSyncErrorSync");
+                            actualId = SendDataInfoMessage(socket, actualId, dataToSend, null, "ErrorSyncErrorSync");
                         }
                         else if ((data == 0) && flagTeste3)
                         {
+                            Console.WriteLine("== Send fixed error frame ==");
                             actualId = actualId == 0 ? 1 : 0;
                             flagTeste3 = false;
-                            var framework = $"dcc023c2dcc023c2CCCC0001AAAA12345678901dcc023c2dcc023c20004fef5{actualId.ToString().PadLeft(2, '0')}0001020304";
+                            var checksumCalculatedError = CalculateChecksum("dcc023c2dcc023c20004" + "0000" + actualId.ToString().PadLeft(2, '0') + "00");
+                            var framework = "dcc023c2dcc023c2CCCC0001AAAA12345678901dcc023c2dcc023c20004" + checksumCalculatedError + actualId.ToString().PadLeft(2, '0') + "0001020304";
                             Console.WriteLine("Send Framework: " + framework);
                             byte[] byteData = Encoding.ASCII.GetBytes(framework);
                             socket.Send(byteData);
                         }
                         else
                         {
-                            SendDataInfoMessage(socket, actualId, dataToSend);
+                            actualId = SendDataInfoMessage(socket, actualId, dataToSend);
                         }
                     }
                     else
                     {
-                        SendEndMessage(socket, actualId);
+                        actualId = SendEndMessage(socket, actualId);
                     }
 
                     sw.Start();
@@ -615,7 +614,7 @@ namespace DCCNET_TP0
                         catch (SocketException)
                         {
                             Console.WriteLine("Timeout receive message - Resend - Time elapsed: " + TIMEOUT / 1000 + "s");
-                            break; // Receive Timeout - Resend message
+                            break;
                         }
 
                         var canFoundData = GetCorrectContentFramePattern(content, out frame);
@@ -629,7 +628,6 @@ namespace DCCNET_TP0
                             if ((Int16.Parse(frame.Lenght) == 0) && (frame.Flags == FLAG_ACK)) // ACK
                             {
                                 Console.WriteLine("[Frame ACK] Data: " + frame.ToString());
-                                actualId = actualId == 0 ? 1 : 0;
                                 data++;
                                 break;
                             }
@@ -677,7 +675,7 @@ namespace DCCNET_TP0
 
                 foreach (var data in dataFoundList)
                 {
-                    if(data != string.Empty)
+                    if (data != string.Empty)
                     {
                         var dataSync = twoSync + data;
                         try
@@ -730,7 +728,6 @@ namespace DCCNET_TP0
             private static int SendDataInfoMessage(Socket socket, int actualId, string dataToSend, string forceChecksum = null, string forceSync = null)
             {
                 actualId = actualId == 0 ? 1 : 0;
-
                 var framework = new Frame(actualId.ToString(), FLAG_INFO, dataToSend, forceChecksum, forceSync).ToString();
 
                 Console.WriteLine("Send Framework: " + framework);
