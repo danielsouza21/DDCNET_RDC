@@ -11,8 +11,8 @@ using System.Threading;
 // TP1 - Redes de computadores
 // Universidade Federal de Minas Gerais
 // DCCNET
-// Daniel Oliveira Souza
-// Maria Fernanda Favaro
+// Daniel Oliveira Souza - 2018019435
+// Maria Fernanda Favaro - 2018019532
 
 namespace DCCNET_TP0_Error
 {
@@ -460,13 +460,22 @@ namespace DCCNET_TP0_Error
             File.AppendAllText(file, content);
         }
 
+        private static void WriteAppendData(string content, string filename)
+        {
+            using (var fileStream = new FileStream(filename, FileMode.Append, FileAccess.Write, FileShare.None))
+            using (var bw = new BinaryWriter(fileStream))
+            {
+                bw.Write(content);
+            }
+        }
+
         private static List<String> GetStringSeparatedFromFile(string namefile)
         {
             byte[] fileData = null;
 
             try
             {
-                using (FileStream fs = File.OpenRead(namefile + ".txt"))
+                using (FileStream fs = File.OpenRead(namefile))
                 {
                     Console.WriteLine("Opening file " + namefile);
                     using (BinaryReader binaryReader = new BinaryReader(fs))
@@ -641,7 +650,7 @@ namespace DCCNET_TP0_Error
                                 if ((Int32.Parse(frame.Id) != lastId) || lastId == null)  // Accept just if is a different info
                                 {
                                     Console.WriteLine("--> Accepted Info");
-                                    WriteTxt(frame.Data, FileOutput);
+                                    WriteAppendData(frame.Data, FileOutput);
 
                                     SendConfirmationACK(socket, frame);
                                     lastId = Int32.Parse(frame.Id);

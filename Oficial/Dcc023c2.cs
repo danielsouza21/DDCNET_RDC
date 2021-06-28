@@ -14,7 +14,7 @@ using System.Threading;
 // Daniel Oliveira Souza
 // Maria Fernanda Favaro
 
-namespace DCCNET_TP0
+namespace DCCNET_TP1
 {
     public class Dcc023c2
     {
@@ -29,7 +29,7 @@ namespace DCCNET_TP0
 
         static void Main(string[] args)
         {
-            Console.WriteLine("Dcc023c2 - Start application");
+            Console.WriteLine("Emulador DCCNET - Start application - TP1");
 
             if ((args.Length < 4))
             {
@@ -209,10 +209,6 @@ namespace DCCNET_TP0
                 {
                     Console.WriteLine(e.ToString());
                 }
-
-                //Console.WriteLine("\nPress ENTER to continue...");
-                //Console.Read();
-
             }
 
             private static void AcceptCallback(IAsyncResult ar)
@@ -454,10 +450,13 @@ namespace DCCNET_TP0
             return Frame;
         }
 
-        private static void WriteTxt(string content, string filename)
+        private static void WriteAppendData(string content, string filename)
         {
-            var file = filename + ".txt";
-            File.AppendAllText(file, content);
+            using (var fileStream = new FileStream(filename, FileMode.Append, FileAccess.Write, FileShare.None))
+            using (var bw = new BinaryWriter(fileStream))
+            {
+                bw.Write(content);
+            }
         }
 
         private static List<String> GetStringSeparatedFromFile(string namefile)
@@ -466,7 +465,7 @@ namespace DCCNET_TP0
 
             try
             {
-                using (FileStream fs = File.OpenRead(namefile + ".txt"))
+                using (FileStream fs = File.OpenRead(namefile))
                 {
                     Console.WriteLine("Opening file " + namefile);
                     using (BinaryReader binaryReader = new BinaryReader(fs))
@@ -610,7 +609,7 @@ namespace DCCNET_TP0
                                 if ((Int32.Parse(frame.Id) != lastId) || lastId == null)  // Accept just if is a different info
                                 {
                                     Console.WriteLine("--> Accepted Info");
-                                    WriteTxt(frame.Data, FileOutput);
+                                    WriteAppendData(frame.Data, FileOutput);
 
                                     SendConfirmationACK(socket, frame);
                                     lastId = Int32.Parse(frame.Id);
@@ -653,7 +652,7 @@ namespace DCCNET_TP0
                         }
                         catch
                         {
-                            Console.WriteLine("Catch");
+                            Console.WriteLine("Error get frame.");
                         }
 
                         if (VerifyChecksum(frame.GetHeader()))

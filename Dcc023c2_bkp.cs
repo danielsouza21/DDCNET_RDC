@@ -27,7 +27,7 @@ namespace DCCNET_TP0_bkp
 
         public static int TIMEOUT = 3000;
 
-        static void Mainbk´p(string[] args)
+        static void Mainbkp(string[] args)
         {
             if ((args.Length < 4))
             {

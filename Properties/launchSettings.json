@@ -2,11 +2,11 @@
   "profiles": {
     "DCCNET_TP0": {
       "commandName": "Project",
-      "commandLineArgs": "-c 127.0.0.1 5151 inputClient outputClient"
+      "commandLineArgs": "-c 127.0.0.1 5151 inputClient.txt outputClient.txt"
     },
     "DCCNET_TP0_Server": {
       "commandName": "Project",
-      "commandLineArgs": "-s 5151 inputServer outputServer"
+      "commandLineArgs": "-s 5151 inputTeste.bat outputServer.txt"
     }
   }
 }
