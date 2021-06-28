@@ -29,7 +29,7 @@ namespace DCCNET_TP1
 
         static void Main(string[] args)
         {
-            Console.WriteLine("Emulador DCCNET - Start application - TP1");
+            Console.WriteLine("DCCNET - Start Emulator");
 
             if ((args.Length < 4))
             {
@@ -452,11 +452,7 @@ namespace DCCNET_TP1
 
         private static void WriteAppendData(string content, string filename)
         {
-            using (var fileStream = new FileStream(filename, FileMode.Append, FileAccess.Write, FileShare.None))
-            using (var bw = new BinaryWriter(fileStream))
-            {
-                bw.Write(content);
-            }
+            File.AppendAllText(filename, content);
         }
 
         private static List<String> GetStringSeparatedFromFile(string namefile)
