@@ -36,6 +36,7 @@ namespace DCCNET_TP1
                 Console.WriteLine("Argumentos invalidos.");
                 Console.WriteLine("<dcc023c2.exe> -s <port> <input> <output>");
                 Console.WriteLine("<dcc023c2.exe> -c <IP> <port> <input> <output>");
+                Console.WriteLine("Ex. linux: mono dcc023c2.exe -s 5151 inputServer.txt outputServer.txt");
             }
 
             if (args[0] == "-c")
